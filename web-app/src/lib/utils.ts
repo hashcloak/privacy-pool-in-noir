@@ -46,9 +46,8 @@ export const generateProof = async (
   });
 
   const { proof, publicInputs } = await backend.generateProof(witness, { keccak: true });
-
   const isValid = await backend.verifyProof({proof, publicInputs}, {keccak: true});
-  console.log('logs', `Proof is ${isValid ? 'valid' : 'invalid'}... ✅`);
+  console.log('logs', `Proof is ${isValid ? 'valid' : 'invalid'} (local validation)`);
 
   return {
     proof: { proof, publicInputs },
