@@ -6,9 +6,6 @@ use std::array_conversions::u256::*;
 use std::bytes_conversions::u256::*;
 use std::bytes::Bytes;
 
-// TODO remove
-use std::logging::log;
-
 const N: u256 = 32768;
 const LOG_N: u256 = 15;
 const NUMBER_OF_PUBLIC_INPUTS: u64 = 20;
@@ -158,7 +155,7 @@ const NUMBER_OF_SUBRELATIONS: u64 = 26;
 const BATCHED_RELATION_PARTIAL_LENGTH: u64 = 8;
 const NUMBER_OF_ENTITIES: u64 = 40;
 const NUMBER_UNSHIFTED: u64 = 35;
-// TODO, is this always unused?
+// Unused, but keeping for consistency with Solidity
 const NUMBER_TO_BE_SHIFTED: u64 = 5;
 const PAIRING_POINTS_SIZE: u64 = 16;
 const NUMBER_OF_ALPHAS: u64 = 25;
@@ -250,6 +247,7 @@ const X2x2: u256 = 0x260e01b251f6f1c7e7ff4e580791dee8ea51d87a358e038b4efe30fac09
 const X2y1: u256 = 0x22febda3c0c0632a56475b4214e5615e11e6dd3f96e6cea2854a87d4dacc5e55u256;
 const X2y2: u256 = 0x04fc6369f7110fe3d25156c1bb9a72859cf2a04641f99ba4ee413c80da6a5fe4u256;
 
+
 pub fn convert_proof_point(input: G1ProofPoint) -> G1Point {
     G1Point {
         x: input.x[0] | (input.x[1] << 136),
@@ -301,7 +299,6 @@ impl G1Point {
     }
 }
 
-// Loopsize must be known, so generics don't seem to work here
 // 70 = N = NUMBER_OF_ENTITIES + CONST_PROOF_SIZE_LOG_N + 2
 pub fn batch_mul(points: [G1Point; 70], scalars: [u256; 70]) -> G1Point {
     let mut acc = points[0].u256_mul(scalars[0]);
@@ -461,9 +458,6 @@ pub struct Transcript {
     pub shplonk_z: u256,
 }
 
-// PUB_INPUT_SIZE = 1
-// In Solidity this is a byte array, but here we use fixed size.
-// The size could be computed from publicInputsSize - PAIRING_POINTS_SIZE, but Sway doesn't allow dynamic array sizes
 pub fn generate_transcript(proof: Proof, public_inputs: [u256;4], circuit_size: u256, pub_inputs_offset: u256)  -> Transcript {
     let (relation_parameters, previous_challenge0): (RelationParameters, u256) = generate_relation_parameters_challenges(proof, public_inputs, circuit_size, pub_inputs_offset);
 
@@ -506,7 +500,7 @@ pub fn split_challenge(challenge: u256) -> (u256, u256) {
 
 pub fn generate_relation_parameters_challenges(
   proof: Proof,
-  public_inputs: [u256;4],// PUB_INPUT_SIZE = 1
+  public_inputs: [u256;4],
   circuit_size: u256,
   pub_inputs_offset: u256,
 ) -> (RelationParameters, u256) {
@@ -528,7 +522,7 @@ pub fn generate_relation_parameters_challenges(
 const ROUND0_LEN: u64 = 32;
 pub fn generate_eta_challenge(
     proof: Proof,
-    public_inputs: [u256; 4],// PUB_INPUT_SIZE = 1
+    public_inputs: [u256; 4],
     circuit_size: u256,
     pub_inputs_offset: u256,
 ) -> [u256; 4] {
@@ -780,7 +774,7 @@ pub fn generate_gemini_R_challenge(proof: Proof, prev_challenge: u256) -> ([u256
 
 // 29 = (CONST_PROOF_SIZE_LOG_N) + 1
 pub fn generate_shplonk_nu_challenge(proof: Proof, prev_challenge: u256) -> ([u256; 29], u256, u256) {
-  // CONST_PROOF_SIZE_LOG_N + 1
+    // CONST_PROOF_SIZE_LOG_N + 1
     let mut shplonk_nu_challenge_elements: [u256; 29] = [0u256; 29];
     let mut transcript = Bytes::new();
     shplonk_nu_challenge_elements[0] = prev_challenge;
@@ -826,11 +820,6 @@ pub fn generate_shplonk_z_challenge(proof: Proof, prev_challenge: u256) -> ([u25
     (shplonk_Z_challenge, shplonk_Z, next_previous_field)
 }
 
-// The input value to RelationsLib.accumulateRelationEvaluations
-// is sumcheckEvaluations
-// The "wire" function is just indexing on proof.sumcheck_evaluations[j]
-// where j is defined by the enum
-
 const NEG_HALF_MODULO_P: u256 = 0x183227397098d014dc2822db40c0ac2e9419f4243cdcb848a1f0fac9f8000000u256;
 
 // 40 = NUMBER_OF_ENTITIES
@@ -867,7 +856,6 @@ pub fn accumulate_arithmetic_relation(p: [u256; 40], domain_sep: u256) -> (u256,
 }
 
 // 16 = PAIRING_POINTS_SIZE
-// 1 = PUB_INPUT_SIZE
 pub fn compute_public_input_delta(public_inputs: [u256; 4], pairing_point_object: [u256; 16], beta: u256, gamma: u256, offset: u256) -> u256 {
 
     let mut numerator: u256 = 1u256;
@@ -1323,7 +1311,6 @@ pub fn accumulate_poseidon_internal_relation(
 
     let q_pos_by_scaling = p[WIRE_Q_POSEIDON2_INTERNAL].mulmod(domain_sep);
 
-// TODO values for evals[22]-evals[25] get added to the existing values in the Solidity code
     let v1 = u1.mulmod(INTERNAL_MATRIX_DIAGONAL[0]).addmod(u_sum);
     let eval22 = q_pos_by_scaling.mulmod(v1.submod(p[WIRE_W_L_SHIFT]));
 
@@ -1612,7 +1599,6 @@ pub fn verify_shplemini(proof: Proof, vk: VerificationKey, tp: Transcript) -> bo
     let powers_of_evaluation_challenge: [u256; 28] = compute_squares(tp.gemini_r);
     // Arrays hold values that will be linearly combined for the gemini and shplonk batch openings
     let mut scalars: [u256; 70] = [0u256; 70]; // 70 = 40 + 28 + 2 = NUMBER_OF_ENTITIES + CONST_PROOF_SIZE_LOG_N + 2
-    // TODO default value for G1Point
     let mut commitments: [G1Point; 70] = [G1Point { x: 0u256, y: 0u256 }; 70]; // 70 = NUMBER_OF_ENTITIES + CONST_PROOF_SIZE_LOG_N + 2
 
     let pos_inverted_denominator: u256 = inverse(tp.shplonk_z.submod(powers_of_evaluation_challenge[0]));

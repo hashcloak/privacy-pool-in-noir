@@ -7,4 +7,4 @@ Deploy this Sway contract to testnet:
 forc deploy --node-url https://testnet.fuel.network/graphql
 ```
 
-The deployed contract has address 0xb9f7dd952860eb6c087c429d0c792865c252a5f0e8e5f73ff3b8303056e6ffcf. 
+The deployed contract has address 0xe8da283dbb6987def0e85fff26e2a7265576eac4b231cfe9c5c131c188a11271. 
