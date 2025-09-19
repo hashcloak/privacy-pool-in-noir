@@ -45,10 +45,12 @@ export const generateProof = async (
     merkle_root: tree.root.toString(),
   });
 
-  const proof = await backend.generateProof(witness);
+  const { proof, publicInputs } = await backend.generateProof(witness, { keccak: true });
+  const isValid = await backend.verifyProof({proof, publicInputs}, {keccak: true});
+  console.log('logs', `Proof is ${isValid ? 'valid' : 'invalid'} (local validation)`);
 
   return {
-    proof,
+    proof: { proof, publicInputs },
     newNote: newNoteValue
       ? {
           value: newNoteValue,

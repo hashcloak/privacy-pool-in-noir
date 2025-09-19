@@ -4,11 +4,19 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DollarSign, TrendingUp, TrendingDown, Clock, Monitor, Loader2 } from 'lucide-react';
+import { SwayVerifier } from '@/sway-contracts-api';
 import { LocalStorage } from '@/lib/storage';
 import type { Note, IMTNode } from '@/lib/types';
-import { debugStorage } from '@/lib/debug';
 import { generateProof} from "../lib/utils"
 import { useToast } from '@/hooks/use-toast';
+import { Account, BigNumberish, Fuel, Network, Provider } from 'fuels';
+import { parseAztecProofToSway, normalizePublicInputs } from '@/lib/proof-to-sway';
+import { FuelWalletConnector } from '@fuels/connectors';
+
+const NETWORK_URL = "https://testnet.fuel.network/v1/graphql"; 
+const fuel = new Fuel({
+  connectors: [new FuelWalletConnector()],
+});
 
 interface Transaction {
   id: string;
@@ -16,6 +24,15 @@ interface Transaction {
   amount: number;
   date: Date;
   description: string;
+}
+
+async function ensureTestnetSelected() {
+  const nets: Array<Network> = await fuel.networks();
+  const hasTestnet = nets.some((n) => n?.url === NETWORK_URL);
+  if (!hasTestnet) {
+    await fuel.addNetwork(NETWORK_URL);
+  }
+  await fuel.selectNetwork({ url: NETWORK_URL});
 }
 
 const BankingInterface = () => {
@@ -32,6 +49,36 @@ const BankingInterface = () => {
   const [wasReinitialized, setWasReinitialized] = useState<boolean>(false);
   const [isWithdrawing, setIsWithdrawing] = useState<boolean>(false);
   const { toast } = useToast();
+
+  const [wallet, setWallet] = useState<Account | null>(null);
+
+  const connectFuel = React.useCallback(async () => {
+    // Connect to Fuel Wallet in browser
+    try {
+      if (!(await fuel.hasConnector())) {
+        toast({ title: 'Fuel Wallet not installed' });
+        return;
+      }
+
+      const list = await fuel.connectors();
+      const first = list?.[0];
+      await fuel.selectConnector(first.name);
+      await fuel.connect();
+      
+       await ensureTestnetSelected();
+
+      const account = await fuel.currentAccount();
+      const w = await fuel.getWallet(account);
+      w.connect(new Provider(NETWORK_URL));
+
+      setWallet(w as unknown as Account);
+      toast({ title: 'Fuel Wallet connected' });
+    } catch (err) {
+      console.error(err);
+      toast({ title: 'Wallet connect failed', description: String(err) });
+    }
+  }, [toast]);
+
 
   // Initialize storage and load existing data with validation
   useEffect(() => {
@@ -172,6 +219,28 @@ const BankingInterface = () => {
         const { proof, newNote } = await generateProof(currentNote, tree, withdrawAmount);
         console.log("proof", proof);
 
+        ////////// ON-CHAIN VERIFICATION //////////
+        const proofSway = parseAztecProofToSway(proof.proof);
+        const pubInputs: [BigNumberish, BigNumberish, BigNumberish, BigNumberish] = normalizePublicInputs(proof.publicInputs);
+
+        if (!wallet) {
+          console.log("No wallet connected. Proof was not verifier on-chain.");
+          toast({ title: 'Connect your Fuel Wallet first' });
+          return;
+        }
+
+        const contractId = "0xe8da283dbb6987def0e85fff26e2a7265576eac4b231cfe9c5c131c188a11271";
+        const deployedContract = new SwayVerifier(contractId, wallet);
+
+        const { waitForResult } = await deployedContract
+          .functions
+          .verify_proof(proofSway, pubInputs)
+          .call();
+
+        const { value } = await waitForResult();
+        console.log('on-chain verification result:', value);
+        ////////// END ON-CHAIN VERIFICATION //////////
+
         const newPoolBalance = poolBalance - withdrawAmount;
         const newAccountBalance = accountBalance + withdrawAmount;
         
@@ -290,6 +359,27 @@ const BankingInterface = () => {
         )}
 
       </div>
+
+      <div className="mt-4 mb-4 w-fit mx-auto p-3 rounded border border-primary/40 bg-primary/5 text-center">
+        <div className="terminal-text text-sm font-bold text-primary tracking-wide">
+          ON-CHAIN VERIFICATION ENABLED
+        </div>
+        <div className="terminal-text text-xs text-muted-foreground">
+          Network: Fuel testnet
+        </div>
+      </div>
+
+
+
+      {wallet ? (
+        <div className="terminal-text text-xl font-bold text-primary mb-6">
+          Fuel Wallet connected
+        </div>
+      ) : (
+        <Button onClick={connectFuel} className="retro-button">
+          Connect Fuel Wallet
+        </Button>
+      )}
 
       {/* Balance Cards */}
       <div className="max-w-6xl mx-auto grid gap-6 grid-cols-1 lg:grid-cols-2 mb-8">
